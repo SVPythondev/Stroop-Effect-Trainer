@@ -1,0 +1,115 @@
+<!DOCTYPE html> <!-- Tells the browser this is a modern web page -->
+<html lang="en"> <!-- Start of the page; the language is English -->
+<head> <!-- Invisible page settings go here -->
+<meta charset="utf-8"> <!-- Allows all characters to display correctly -->
+<meta name="viewport" content="width=device-width, initial-scale=1"> <!-- Makes the page fit phone screens -->
+<title>Stroop Effect: Attention Trainer</title> <!-- Text shown on the browser tab -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 2 2'%3E%3Crect width='1' height='1' fill='%23E74C3C'/%3E%3Crect x='1' width='1' height='1' fill='%232ECC71'/%3E%3Crect y='1' width='1' height='1' fill='%233498DB'/%3E%3Crect x='1' y='1' width='1' height='1' fill='%23F1C40F'/%3E%3C/svg%3E"> <!-- Tab icon: four colored squares -->
+<style> /* Start of the visual styling rules */
+body { margin: 0; background: #1E1E2E; color: #CDD6F4; font-family: Helvetica, Arial, sans-serif; text-align: center; } /* Dark background, light centered text */
+.screen { display: none; padding: 24px 16px; max-width: 450px; margin: auto; } /* Every screen is hidden by default */
+.screen.on { display: block; } /* The active screen is visible */
+button { font-size: 16px; padding: 10px 18px; margin: 6px; border: 0; border-radius: 8px; background: #CDD6F4; cursor: pointer; } /* Look of all buttons */
+button:focus-visible { outline: 3px solid #F1C40F; } /* Yellow outline when using the keyboard */
+#word { font-size: 44px; font-weight: bold; margin: 50px 0; } /* Big word in the middle of the game */
+.dots { display: flex; justify-content: center; gap: 14px; } /* Put the color circles in one row */
+.dot { width: 64px; height: 64px; border-radius: 50%; padding: 0; margin: 0; } /* Make the buttons round */
+#live { font-size: 13px; color: #A6ADC8; min-height: 18px; } /* Small dim live score that does not distract */
+</style> <!-- End of the styling rules -->
+</head> <!-- End of the invisible settings -->
+<body> <!-- Start of the visible page -->
+<div id="start" class="screen on"> <!-- Start screen, visible first -->
+  <h1>Stroop Effect Trainer</h1> <!-- Game title -->
+  <p>Choose a mode:</p> <!-- Ask the player to pick a mode -->
+  <label><input type="radio" name="mode" value="ink" checked> Pick the COLOR OF THE TEXT</label><br> <!-- Mode 1, selected by default -->
+  <label><input type="radio" name="mode" value="word"> Pick the COLOR NAMED BY THE WORD</label> <!-- Mode 2 -->
+  <p>Round length:</p> <!-- Caption for the time setting -->
+  <button onclick="changeTime(-10)">- 10s</button><b id="len">60s</b><button onclick="changeTime(10)">+ 10s</button><br> <!-- Shorten, show, and lengthen the round -->
+  <button onclick="startGame()">START</button> <!-- Starts the game -->
+</div> <!-- End of the start screen -->
+<div id="game" class="screen"> <!-- Game screen, hidden at first -->
+  <h2 id="timer"></h2> <!-- Remaining time is shown here -->
+  <p id="hint"></p> <!-- Hint about the chosen mode is shown here -->
+  <p id="live"></p> <!-- Live score is shown here when allowed -->
+  <div id="word"></div> <!-- The colored word is shown here -->
+  <div class="dots" id="dots"></div> <!-- The four color circles are placed here -->
+  <button id="toggle" onclick="toggleScore()">Show score</button> <!-- Shows or hides the live score -->
+</div> <!-- End of the game screen -->
+<div id="result" class="screen"> <!-- Results screen, hidden at first -->
+  <h1>Results</h1> <!-- Results title -->
+  <p id="stats"></p> <!-- Statistics are written here -->
+  <button onclick="show('start')">PLAY AGAIN</button> <!-- Returns to the start screen -->
+</div> <!-- End of the results screen -->
+<script> // Start of the program code
+const COLORS = { RED: "#E74C3C", GREEN: "#2ECC71", BLUE: "#3498DB", YELLOW: "#F1C40F" }; // Color names and their hex codes
+let mode, duration = 60, correct, wrong, times, endAt, answer, shownAt, showScore = false, timerId; // Variables that remember the game state
+const $ = id => document.getElementById(id); // Short helper to find a page element by its id
+function show(id) { // Switch to the screen with the given id
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("on")); // Hide every screen
+  $(id).classList.add("on"); // Show only the chosen screen
+} // End of show
+function changeTime(d) { // Change the round length by d seconds
+  duration = Math.min(300, Math.max(30, duration + d)); // Keep the length between 30 and 300 seconds
+  $("len").textContent = duration + "s"; // Show the new length on screen
+} // End of changeTime
+for (const name in COLORS) { // Create one circle for each color
+  const b = document.createElement("button"); // Make a new button
+  b.className = "dot"; // Give it the round style
+  b.style.background = COLORS[name]; // Paint it with the color
+  b.setAttribute("aria-label", name.toLowerCase()); // Describe it for screen readers
+  b.onclick = () => check(name); // When clicked, check this color
+  $("dots").append(b); // Put the button into the page
+} // End of the circle creation
+function startGame() { // Prepare and start a new round
+  mode = document.querySelector("input[name=mode]:checked").value; // Read the chosen mode
+  correct = 0; wrong = 0; times = []; // Reset the counters and reaction times
+  endAt = Date.now() + duration * 1000; // Calculate when the round ends
+  $("hint").textContent = mode === "ink" ? "Choose the color of the TEXT!" : "Choose the color the WORD NAMES!"; // Show the hint for this mode
+  showScore = false; $("toggle").textContent = "Show score"; updateScore(); // Hide the live score at the start
+  show("game"); // Switch to the game screen
+  nextRound(); // Show the first word
+  clearInterval(timerId); // Stop any old countdown
+  timerId = setInterval(tick, 200); // Run the countdown every 0.2 seconds
+  tick(); // Update the timer immediately
+} // End of startGame
+function tick() { // Update the countdown timer
+  const left = Math.ceil((endAt - Date.now()) / 1000); // Whole seconds left
+  if (left <= 0) { clearInterval(timerId); showResult(); return; } // When time is over, stop and show results
+  $("timer").textContent = "Time left: " + left + "s"; // Display the remaining time
+} // End of tick
+function nextRound() { // Show a new random word
+  const names = Object.keys(COLORS); // List of color names
+  const word = names[Math.floor(Math.random() * names.length)]; // Pick a random word to display
+  const ink = names[Math.floor(Math.random() * names.length)]; // Pick a random color to paint the word
+  answer = mode === "ink" ? ink : word; // The right answer depends on the mode
+  $("word").textContent = word; // Show the word
+  $("word").style.color = COLORS[ink]; // Paint the word with the chosen color
+  shownAt = Date.now(); // Remember when the word appeared
+} // End of nextRound
+function check(chosen) { // Called when the player clicks a circle
+  times.push((Date.now() - shownAt) / 1000); // Save the reaction time in seconds
+  if (chosen === answer) correct++; else wrong++; // Count a correct or a wrong answer
+  updateScore(); // Refresh the live score
+  nextRound(); // Show the next word
+} // End of check
+function toggleScore() { // Called by the show/hide score button
+  showScore = !showScore; // Switch between shown and hidden
+  $("toggle").textContent = showScore ? "Hide score" : "Show score"; // Change the button text
+  updateScore(); // Refresh the live score
+} // End of toggleScore
+function updateScore() { // Write the live score or clear it
+  $("live").textContent = showScore ? "Correct: " + correct + "   Wrong: " + wrong : ""; // Show numbers only when allowed
+} // End of updateScore
+function showResult() { // Build the results screen
+  const total = correct + wrong; // Total number of answers
+  const accuracy = total ? 100 * correct / total : 0; // Percent of correct answers
+  const avg = total ? times.reduce((a, b) => a + b, 0) / total : 2.5; // Average reaction time in seconds
+  const speed = Math.max(0, Math.min(100, 100 * (2.5 - avg) / 2)); // Convert reaction time to 0-100
+  const brain = Math.round(0.6 * accuracy + 0.4 * speed); // Brain score: 60% accuracy, 40% speed
+  const level = brain >= 80 ? "Excellent focus!" : brain >= 60 ? "Good focus" : brain >= 40 ? "Average focus" : "Needs more practice"; // Text rating
+  $("stats").innerHTML = "Correct answers: " + correct + "<br>Wrong answers: " + wrong + "<br>Accuracy: " + accuracy.toFixed(0) + "%<br>Average reaction time: " + avg.toFixed(2) + "s<br><b>Brain performance: " + brain + "/100</b><br>" + level; // Write all statistics
+  show("result"); // Switch to the results screen
+} // End of showResult
+</script> <!-- End of the program code -->
+</body> <!-- End of the visible page -->
+</html> <!-- End of the page -->
